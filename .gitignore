@@ -1,6 +1,6 @@
 # Ignore sensitive files
-storageState.json
-storageState.b64
+#storageState.json
+#storageState.b64
 
 # Node modules
 node_modules/
