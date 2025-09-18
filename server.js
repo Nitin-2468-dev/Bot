@@ -1,39 +1,52 @@
-import { chromium } from "playwright";
+import express from "express";
+import { chromium } from "playwright";   // make sure playwright is installed
 import fs from "fs";
 
-async function pingFirebase() {
-  let storageState;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  // Prefer base64 file if exists
-  if (fs.existsSync("storageState.b64")) {
-    const b64 = fs.readFileSync("storageState.b64", "utf8");
-    storageState = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
-  } else if (fs.existsSync("storageState.json")) {
-    storageState = JSON.parse(fs.readFileSync("storageState.json", "utf8"));
-  } else {
-    throw new Error("No storageState.json or storageState.b64 found");
+// Route for sanity check
+app.get("/", (req, res) => {
+  res.send("Hello from Bot-main 🚀 (Playwright will keep Firebase Studio alive)");
+});
+
+// Function to load Firebase Studio with saved login
+// Function to load Firebase Studio with saved login
+async function keepAlive() {
+  try {
+    console.log("⚡ Starting Playwright keep-alive task...");
+
+    // Load saved storage state (login cookies/session)
+    const storageState = JSON.parse(fs.readFileSync("./storageState.json", "utf-8"));
+
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ storageState });
+
+    const page = await context.newPage();
+    await page.goto("https://studio.firebase.google.com/vps123-79830504", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+
+    console.log("✅ Page loaded successfully at", new Date().toLocaleTimeString());
+
+    // 🕒 Keep the page open for 2 minutes (120000 ms)
+    await page.waitForTimeout(120000);
+
+    await browser.close();
+    console.log("🛑 Browser closed at", new Date().toLocaleTimeString());
+  } catch (err) {
+    console.error("❌ Error during keep-alive:", err.message);
   }
-
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState });
-  const page = await context.newPage();
-
-  await page.goto("https://studio.firebase.google.com/vps123-79830504", {
-    waitUntil: "networkidle"
-  });
-
-  console.log(`[${new Date().toISOString()}] ✅ Workspace opened successfully`);
-  await browser.close();
 }
 
-(async () => {
-  while (true) {
-    try {
-      await pingFirebase();
-    } catch (err) {
-      console.error(`[${new Date().toISOString()}] ❌ Error:`, err);
-    }
-    // wait 5 minutes
-    await new Promise(r => setTimeout(r, 5 * 60 * 1000));
-  }
-})();
+
+// Schedule keepAlive every 35 minutes (2100000 ms)
+setInterval(keepAlive, 35 * 60 * 1000);
+
+// Run once at startup
+keepAlive();
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
+});
